@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #ffffff;
+    color: #09090b;
+  }
+
+  body {
+    font-feature-settings: "ss01", "cv11", "tnum";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    background-color: #ffffff;
+    color: #09090b;
+  }
+
+  ::selection {
+    background-color: #0a0a0c;
+    color: #fafafa;
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply font-mono uppercase tracking-wide2 text-[10px] text-ink-muted;
+  }
+  .eyebrow-accent {
+    @apply font-mono uppercase tracking-wide2 text-[10px] text-accent;
+  }
+  .dateline {
+    @apply font-mono tracking-wide1 text-[12px] text-ink-secondary tabular-nums;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide2;
+  }
+
+  /* AI Prose (chat / summary) */
+  .prose-ai {
+    @apply text-[15px] leading-[1.7] text-ink/90;
+  }
+  .prose-ai p {
+    margin-bottom: 0.85em;
+  }
+  .prose-ai strong {
+    color: #09090b;
+    font-weight: 600;
+  }
+  .prose-ai ul {
+    list-style: none;
+    padding-left: 0;
+  }
+  .prose-ai ul li {
+    position: relative;
+    padding-left: 1.1em;
+    margin-bottom: 0.5em;
+  }
+  .prose-ai ul li::before {
+    content: "·";
+    position: absolute;
+    left: 0.2em;
+    top: -0.1em;
+    color: #e84a1c;
+    font-weight: 700;
+  }
+  .prose-ai h2 {
+    @apply text-[22px] font-semibold tracking-tight2 mt-6 mb-2 text-ink;
+  }
+  .prose-ai h3 {
+    @apply text-[17px] font-semibold tracking-tight2 mt-5 mb-1.5 text-ink;
+  }
+  .prose-ai code {
+    @apply font-mono text-[13px] bg-raised px-1 py-0.5 rounded;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

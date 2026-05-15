@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Start-Sleep -Seconds 3; try { $r = Invoke-WebRequest -Uri \"http://localhost:3000/markets/cn_a\" -UseBasicParsing -TimeoutSec 20; \"OK status=$\\($r.StatusCode\\) len=$\\($r.Content.Length\\)\" } catch { \"ERR: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(Start-Sleep -Seconds 20; try { $r = Invoke-WebRequest -Uri \"http://localhost:3000/markets/cn_a\" -UseBasicParsing -TimeoutSec 30; \"OK status=$\\($r.StatusCode\\) len=$\\($r.Content.Length\\)\" } catch { \"ERR: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(Get-NetTCPConnection *)"
+    ]
+  }
+}

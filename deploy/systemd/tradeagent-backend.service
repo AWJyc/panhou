@@ -1,0 +1,30 @@
+[Unit]
+Description=tradeAgent FastAPI backend (scheduler + API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tradeagent
+Group=tradeagent
+WorkingDirectory=/opt/tradeagent/backend
+EnvironmentFile=/etc/tradeagent/.env
+# Bypass system proxy for akshare (eastmoney / sina)
+Environment="NO_PROXY=*"
+Environment="no_proxy=*"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/opt/tradeagent/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/tradeagent
+
+[Install]
+WantedBy=multi-user.target
