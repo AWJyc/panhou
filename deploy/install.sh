@@ -20,6 +20,16 @@ if [[ $EUID -ne 0 ]]; then
   echo "Run as root (sudo)." >&2; exit 1
 fi
 
+echo "== [0/9] Swap (next build 在 2c4g 容易 OOM) =="
+if [[ ! -f /swapfile ]] && [[ $(awk '/SwapTotal/ {print $2}' /proc/meminfo) -lt 1024000 ]]; then
+  fallocate -l 4G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  echo "swap 4G enabled"
+fi
+
 echo "== [1/9] System packages =="
 apt-get update
 apt-get install -y \

@@ -9,8 +9,8 @@ import { SectorTreemap } from "@/components/SectorTreemap";
 import { MoverList } from "@/components/MoverList";
 import { fetchLatestReport, fetchReportByDate, fetchReportHistory } from "@/lib/api";
 import { DateSwitcher } from "@/components/DateSwitcher";
-import { Market, MARKET_LABEL_SHORT, Report } from "@/lib/types";
-import { formatChineseDate, formatDateline } from "@/lib/format";
+import { Market, Report } from "@/lib/types";
+import { formatChineseDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 

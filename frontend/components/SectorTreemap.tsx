@@ -1,8 +1,17 @@
 "use client";
 
 import { useMemo } from "react";
-import { hierarchy, treemap, treemapSquarify } from "d3-hierarchy";
+import { hierarchy, treemap, treemapSquarify, HierarchyRectangularNode } from "d3-hierarchy";
 import { Sector } from "@/lib/types";
+
+interface WeightedSector extends Sector {
+  _w: number;
+}
+
+interface TreemapInput {
+  children?: WeightedSector[];
+  _w?: number;
+}
 
 interface Props {
   sectors: Sector[];
@@ -44,20 +53,20 @@ export function SectorTreemap({ sectors }: Props) {
       1
     );
 
-    const root = hierarchy<{ children?: typeof weighted; _w?: number }>({
+    const root = hierarchy<TreemapInput>({
       children: weighted,
     })
-      .sum((d) => (d as any)._w ?? 0)
+      .sum((d) => d._w ?? 0)
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
 
-    treemap<{ children?: typeof weighted }>()
+    treemap<TreemapInput>()
       .tile(treemapSquarify)
       .size([VIEW_W, VIEW_H])
       .paddingOuter(PAD_OUTER)
-      .paddingInner(PAD_INNER)(root as any);
+      .paddingInner(PAD_INNER)(root as HierarchyRectangularNode<TreemapInput>);
 
     return {
-      leaves: root.leaves() as any[],
+      leaves: (root as HierarchyRectangularNode<TreemapInput>).leaves(),
       maxAbs,
     };
   }, [sectors]);
@@ -140,7 +149,7 @@ export function SectorTreemap({ sectors }: Props) {
                       overflow: "hidden",
                       display: "-webkit-box",
                       WebkitLineClamp: Math.floor((h - 50) / 16),
-                      WebkitBoxOrient: "vertical" as any,
+                      WebkitBoxOrient: "vertical" as const,
                     }}
                   >
                     {s.note}

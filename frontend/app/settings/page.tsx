@@ -51,7 +51,7 @@ export default function Settings() {
                 </ul>
               </div>
               <div className="mt-4 text-[13px] text-ink-muted leading-[1.6]">
-                保存后回到 A 股 / 美股详情页，右栏会出现"与报告对话"组件。
+                保存后回到 A 股 / 美股详情页，右栏会出现「与报告对话」组件。
               </div>
             </aside>
           </div>
