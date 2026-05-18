@@ -37,6 +37,7 @@ class IndexOut(BaseModel):
     name: str
     close: float | None = None
     change_pct: float | None = None
+    date: str | None = None  # YYYY-MM-DD, indices 实际数据日
 
 
 class ThemeOut(BaseModel):

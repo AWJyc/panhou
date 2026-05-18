@@ -45,6 +45,7 @@ export interface MarketIndex {
   name: string;
   close: number | null;
   change_pct: number | null;
+  date?: string | null;
 }
 
 export interface Theme {
