@@ -105,7 +105,15 @@ async def _run_overseas(
         len(sources),
     )
 
-    structured, model_id = summarize(market, report_date, sources, pool_digest=digest or None)
+    # 即使 LLM 失败也要保住 indices，让 SnapshotPanel 至少能显示
+    try:
+        structured, model_id = summarize(
+            market, report_date, sources, pool_digest=digest or None
+        )
+    except Exception as e:
+        log.error("%s summarize failed (keeping indices): %s", market, e)
+        structured = {"summary_md": f"LLM 综述失败：{type(e).__name__}", "sectors": [], "movers": []}
+        model_id = ""
     sectors = _build_sectors(structured.get("sectors") or [])
     movers = _build_movers_from_llm(structured.get("movers") or [])
 

@@ -80,8 +80,7 @@ def _fetch_global_indices_em(want_codes: list[tuple[str, str]], attempts: int = 
 # ── 兜底：yahoo finance public API（境外节点直连，国内可能需代理）────────
 _YF_SYM = {
     "N225": ("^N225", "日经 225"),
-    "TOPIX": ("^TPX", "TOPIX"),
-    "JPXN": ("^JPXNK400", "JPX-Nikkei 400"),
+    # TOPIX / JPXN 在 yahoo finance 上没有清晰的 free 接口，主路 EM 失败时只拿 N225
     "KS11": ("^KS11", "KOSPI"),
     "KOSPI200": ("^KS200", "KOSPI 200"),
     "KOSDAQ": ("^KQ11", "KOSDAQ"),
