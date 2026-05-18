@@ -60,7 +60,8 @@ export default async function MarketDetail({
 
   let history: { report_date: string; status: string }[] = [];
   try {
-    history = await fetchReportHistory(market, 60);
+    // 只保留最近 7 天报告，避免日历下拉过长
+    history = (await fetchReportHistory(market, 30)).slice(0, 7);
   } catch {
     /* ignore */
   }
