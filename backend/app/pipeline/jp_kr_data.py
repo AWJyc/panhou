@@ -77,86 +77,72 @@ def _fetch_global_indices_em(want_codes: list[tuple[str, str]], attempts: int = 
     return None
 
 
-# ── sina 兜底：直接 HTTP 调 sina 全球指数实时接口 ─────────────────────────
-# 接口：https://hq.sinajs.cn/list=int_nikkei,int_kospi,...
-# 返回：var hq_str_int_nikkei="日経平均株価,..,..,..,..,..,2026-05-18,15:00";
-# 字段顺序（不同股指略有差异，主要看 close 位置）
-
-_SINA_GLOBAL_SYM = {
-    "N225": ("int_nikkei", "日经 225"),
-    "TOPIX": ("int_topix", "TOPIX"),
-    "KS11": ("int_kospi", "KOSPI"),
-    "KOSDAQ": ("int_kosdaq", "KOSDAQ"),
-    # KOSPI200, JPXN sina 无独立 code
+# ── 兜底：yahoo finance public API（境外节点直连，国内可能需代理）────────
+_YF_SYM = {
+    "N225": ("^N225", "日经 225"),
+    "TOPIX": ("^TPX", "TOPIX"),
+    "JPXN": ("^JPXNK400", "JPX-Nikkei 400"),
+    "KS11": ("^KS11", "KOSPI"),
+    "KOSPI200": ("^KS200", "KOSPI 200"),
+    "KOSDAQ": ("^KQ11", "KOSDAQ"),
 }
 
 
-def _fetch_indices_sina_http(want_codes: list[tuple[str, str]]) -> list[dict]:
-    """直接走 sina hq 实时接口。"""
+def _fetch_indices_yahoo(want_codes: list[tuple[str, str]]) -> list[dict]:
+    """yahoo finance chart API，拿最近 5 天日线算涨跌幅。"""
     import requests
 
-    syms = []
-    code_to_label: dict[str, tuple[str, str]] = {}
-    for em_code, label in want_codes:
-        if em_code in _SINA_GLOBAL_SYM:
-            sina_sym, _ = _SINA_GLOBAL_SYM[em_code]
-            syms.append(sina_sym)
-            code_to_label[sina_sym] = (em_code, label)
-    if not syms:
-        return []
-
-    url = "https://hq.sinajs.cn/list=" + ",".join(syms)
-    headers = {
-        "Referer": "https://finance.sina.com.cn",
-        "User-Agent": "Mozilla/5.0",
-    }
-    try:
-        r = requests.get(url, headers=headers, timeout=10)
-        r.encoding = "gbk"
-        text = r.text
-    except Exception as e:
-        log.warning("sina hq 全球指数失败: %s", e)
-        return []
-
     out: list[dict] = []
-    for line in text.split("\n"):
-        line = line.strip().rstrip(";")
-        if not line.startswith("var hq_str_int_"):
+    for em_code, label in want_codes:
+        yf_sym, fallback_label = _YF_SYM.get(em_code, (None, None))
+        if not yf_sym:
             continue
-        # var hq_str_int_nikkei="名称,now,涨跌,涨跌幅,open,high,low,prev,...,date,time";
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_sym}"
+        params = {"interval": "1d", "range": "5d"}
         try:
-            sina_sym = line.split("var hq_str_")[1].split("=")[0]
-            payload = line.split('="', 1)[1].rstrip('"')
-            parts = payload.split(",")
-            if len(parts) < 8:
+            r = requests.get(
+                url,
+                params=params,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=10,
+            )
+            r.raise_for_status()
+            data = r.json()
+        except Exception as e:
+            log.warning("yahoo %s 失败: %s", yf_sym, e)
+            continue
+        try:
+            res = data["chart"]["result"][0]
+            ts = res["timestamp"]
+            closes = res["indicators"]["quote"][0]["close"]
+            # 去掉 None
+            pairs = [(t, c) for t, c in zip(ts, closes) if c is not None]
+            if len(pairs) < 2:
                 continue
-            em_code, label = code_to_label.get(sina_sym, (None, None))
-            if not em_code:
-                continue
-            close = _to_float(parts[1])
-            pct = _to_float(parts[3])
-            # date 通常在倒数第二个字段
-            data_date = parts[-2] if len(parts) >= 2 else ""
-            if close is None:
-                continue
+            from datetime import datetime, timezone
+
+            last_t, last_close = pairs[-1]
+            prev_close = pairs[-2][1]
+            change_pct = (last_close - prev_close) / prev_close * 100 if prev_close else None
+            iso = datetime.fromtimestamp(last_t, tz=timezone.utc).date().isoformat()
             out.append(
                 {
                     "symbol": em_code,
-                    "name": label,
-                    "close": close,
-                    "change_pct": pct,
-                    "date": data_date[:10],
+                    "name": label or fallback_label,
+                    "close": float(last_close),
+                    "change_pct": change_pct,
+                    "date": iso,
                 }
             )
-        except Exception as e:
-            log.warning("sina parse line failed: %s line=%s", e, line[:80])
+        except (KeyError, IndexError, TypeError) as e:
+            log.warning("yahoo %s parse 失败: %s", yf_sym, e)
             continue
     return out
 
 
 def _fetch_indices_sina_yfinance(want_codes: list[tuple[str, str]]) -> list[dict]:
-    """对外保持函数名兼容；内部走 HTTP 实现。"""
-    return _fetch_indices_sina_http(want_codes)
+    """对外保持函数名兼容；改走 yahoo finance。"""
+    return _fetch_indices_yahoo(want_codes)
 
 
 async def fetch_jp_indices() -> list[dict]:
