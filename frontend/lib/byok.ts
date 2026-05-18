@@ -101,7 +101,7 @@ export interface QAMessage {
 }
 
 export async function callQA(args: {
-  market: "cn_a" | "us";
+  market: "cn_a" | "us" | "jp" | "kr";
   messages: QAMessage[];
 }): Promise<{ answer: string; model: string }> {
   // 登录用户：服务端读 DB 加密 BYOK；身份靠 cookie。

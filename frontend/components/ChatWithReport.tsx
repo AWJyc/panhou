@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { callQA, loadBYOK, QAMessage } from "@/lib/byok";
+import { Market } from "@/lib/types";
 
 interface Props {
-  market: "cn_a" | "us";
+  market: Market;
 }
 
 export function ChatWithReport({ market }: Props) {

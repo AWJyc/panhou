@@ -33,3 +33,5 @@ Thumbs.db
 logs/
 *.log
 _probe_jpkr.py
+.github/workflows/
+.gitignored_*
