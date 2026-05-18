@@ -23,6 +23,16 @@ def _run_us() -> None:
     run_pipeline_sync("us", date.today() - timedelta(days=1))
 
 
+def _run_jp() -> None:
+    # 东京 15:00 JST = 14:00 CST 收盘；14:30 CST 触发，目标日期就是今天
+    run_pipeline_sync("jp", date.today())
+
+
+def _run_kr() -> None:
+    # 首尔 15:30 KST = 14:30 CST 收盘；15:00 CST 触发，目标日期就是今天
+    run_pipeline_sync("kr", date.today())
+
+
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
@@ -38,6 +48,18 @@ def start_scheduler() -> BackgroundScheduler:
         replace_existing=True,
     )
     sched.add_job(
+        _run_jp,
+        CronTrigger(day_of_week="mon-fri", hour=14, minute=30),
+        id="jp_daily",
+        replace_existing=True,
+    )
+    sched.add_job(
+        _run_kr,
+        CronTrigger(day_of_week="mon-fri", hour=15, minute=0),
+        id="kr_daily",
+        replace_existing=True,
+    )
+    sched.add_job(
         _run_us,
         CronTrigger(day_of_week="tue-sat", hour=6, minute=0),
         id="us_daily",
@@ -46,7 +68,10 @@ def start_scheduler() -> BackgroundScheduler:
 
     sched.start()
     _scheduler = sched
-    log.info("scheduler started: cn_a@15:30 mon-fri, us@06:00 tue-sat (%s)", settings.scheduler_timezone)
+    log.info(
+        "scheduler started: jp@14:30, kr@15:00, cn_a@15:30 mon-fri, us@06:00 tue-sat (%s)",
+        settings.scheduler_timezone,
+    )
     return sched
 
 

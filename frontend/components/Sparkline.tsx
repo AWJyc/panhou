@@ -28,6 +28,30 @@ interface SparklineData {
 const cache = new Map<string, SparklineData>();
 const inflight = new Map<string, Promise<SparklineData>>();
 
+// 并发限流：同时最多 3 个请求在飞，避免前端 dev proxy 超时
+const MAX_CONCURRENT = 1;
+let active = 0;
+const queue: Array<() => void> = [];
+
+function acquire(): Promise<void> {
+  if (active < MAX_CONCURRENT) {
+    active++;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    queue.push(() => {
+      active++;
+      resolve();
+    });
+  });
+}
+
+function release(): void {
+  active--;
+  const next = queue.shift();
+  if (next) next();
+}
+
 async function loadSparkline(
   market: Market,
   symbol: string,
@@ -38,28 +62,43 @@ async function loadSparkline(
   if (cached) return cached;
   const existing = inflight.get(key);
   if (existing) return existing;
+
   const url = `/api/stocks/sparkline?market=${market}&symbol=${symbol}${
     date ? `&date=${date}` : ""
   }`;
-  const p = fetch(url)
-    .then((r) => r.json() as Promise<SparklineData>)
-    .then((d) => {
+  const fail = (err: unknown): SparklineData => ({
+    symbol,
+    date: date ?? "",
+    points: [],
+    prev_close: null,
+    error: String(err),
+  });
+
+  const p = (async () => {
+    await acquire();
+    try {
+      // 单请求超时 20s，超了不阻塞下一个
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 20000);
+      try {
+        const r = await fetch(url, { signal: ac.signal });
+        const d = (await r.json()) as SparklineData;
+        cache.set(key, d);
+        return d;
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (e) {
+      const d = fail(e);
       cache.set(key, d);
       return d;
-    })
-    .catch((e) => {
-      const d: SparklineData = {
-        symbol,
-        date: date ?? "",
-        points: [],
-        prev_close: null,
-        error: String(e),
-      };
-      cache.set(key, d);
-      return d;
-    })
-    .finally(() => inflight.delete(key));
+    } finally {
+      release();
+    }
+  })();
+
   inflight.set(key, p);
+  p.finally(() => inflight.delete(key));
   return p;
 }
 

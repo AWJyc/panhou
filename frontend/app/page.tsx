@@ -49,9 +49,11 @@ export default async function Home() {
         )}
 
         <section className="max-w-content mx-auto px-6 lg:px-8 pb-24">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <MarketCard market="cn_a" report={byMarket.get("cn_a")} />
             <MarketCard market="us" report={byMarket.get("us")} />
+            <MarketCard market="jp" report={byMarket.get("jp")} />
+            <MarketCard market="kr" report={byMarket.get("kr")} />
           </div>
         </section>
       </main>

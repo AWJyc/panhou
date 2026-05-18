@@ -1,18 +1,24 @@
-export type Market = "cn_a" | "us";
+export type Market = "cn_a" | "us" | "jp" | "kr";
 
 export const MARKET_LABEL: Record<Market, string> = {
   cn_a: "中国 A 股",
   us: "美股",
+  jp: "日股",
+  kr: "韩股",
 };
 
 export const MARKET_LABEL_SHORT: Record<Market, string> = {
   cn_a: "A 股",
   us: "美股",
+  jp: "日股",
+  kr: "韩股",
 };
 
 export const MARKET_LABEL_EN: Record<Market, string> = {
   cn_a: "MAINLAND CHINA",
   us: "UNITED STATES",
+  jp: "JAPAN",
+  kr: "SOUTH KOREA",
 };
 
 export type MoveType = "limit_up" | "limit_down" | "top_gainer" | "top_loser";

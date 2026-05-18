@@ -21,15 +21,25 @@ log = logging.getLogger(__name__)
 _MARKET_LABEL = {
     "cn_a": "中国 A 股",
     "us": "美股",
+    "jp": "日股 / 日经 225",
+    "kr": "韩股 / KOSPI",
 }
 
 
 SYSTEM_PROMPT_BASE = """你是一位严谨的金融市场分析师。基于给定的搜索结果片段（可能附带结构化盘面统计），提取并结构化"指定市场在指定日期"的盘后报告。
 
+🚨 语言强制规则（最高优先级，违反则视为输出失败）：
+- 所有面向用户的文本字段（summary_md / sectors.name / sectors.note / movers.name / movers.note）**必须是简体中文**。
+- 即使消息源是日文、韩文、英文，**禁止**在 name / note 字段保留任何原文（假名、谚文、英文短语）。必须翻译。
+- 公司名翻译例：「ソニーグループ」→「索尼集团」；「トヨタ自動車」→「丰田汽车」；「アドバンテスト」→「爱德万测试」；「三菱UFJフィナンシャル・グループ」→「三菱UFJ 金融集团」；「삼성전자」→「三星电子」；「SK하이닉스」→「SK 海力士」。
+- 板块名翻译例：「半導体・電子部品」→「半导体与电子元件」；「自動車」→「汽车」；「金融」→「金融」；「Technology」→「科技」。
+- 美股公司名（Apple, Tesla, Nvidia 等）保留英文，note 解读仍然简体中文。
+- symbol 字段（如 7203.T、005930.KS、AAPL）**保持原始代码不变**，不翻译。
+
 通用要求：
 1. 只输出工具调用结果，不要其他文字。
-2. summary_md 用中文 Markdown，3-6 个要点，覆盖：整体涨跌、主线/热点、政策或宏观事件、风险提示。语气客观，不写投资建议。如果消息里给了结构化盘面统计（涨停数、连板分布、高频题材等），必须准确引用这些数字。
-3. sectors 列出当日值得关注的板块（5-10 个），note 写明异动原因。change_pct 如果片段中没明确百分比，留空（不传或传 null）。
+2. summary_md 用简体中文 Markdown，3-6 个要点，覆盖：整体涨跌、主线/热点、政策或宏观事件、风险提示。语气客观，不写投资建议。如果消息里给了结构化盘面统计（涨停数、连板分布、高频题材等），必须准确引用这些数字。
+3. sectors 列出当日值得关注的板块（5-10 个），name 必须简体中文，note 写明异动原因（也用简体中文）。change_pct 如果片段中没明确百分比，留空（不传或传 null）。
 4. 全部数组字段必须出现在工具入参里，即使是空数组。
 """
 
@@ -38,6 +48,12 @@ SYSTEM_PROMPT_DEFAULT = (
     + """
 5. movers 列出代表性个股（涨停/跌停/领涨/领跌，合计 5-15 只）。move_type 必须是 limit_up | limit_down | top_gainer | top_loser 之一。symbol 没有就留空字符串。
 6. 如果搜索结果信息不足以可靠结构化某项，宁可少列也不要编造。
+7. **所有面向用户的中文字段都用简体中文**，包括：summary_md / sectors.name / sectors.note / movers.name / movers.note。
+   - 日文公司名（如「ソニーグループ」「トヨタ自動車」）翻译为通用中译（「索尼集团」「丰田汽车」）；
+   - 韩文公司名（如「삼성전자」「SK하이닉스」）翻译为通用中译（「三星电子」「SK 海力士」）；
+   - 英文公司名保留英文（如「Apple」「Tesla」）但 note 解读必须中文；
+   - sectors.name 也翻译成中文板块名（如「Technology」→「科技」，「半導体」→「半导体」）。
+   - symbol 字段保持原始代码不变（如 7203.T、005930.KS）。
 """
 )
 
@@ -123,10 +139,19 @@ def summarize(
         payload["pool_digest"] = pool_digest
     user_blob = json.dumps(payload, ensure_ascii=False)
 
+    lang_reminder = ""
+    if market in ("jp", "kr"):
+        lang_reminder = (
+            "\n\n🚨 提醒：消息源是" + ("日文" if market == "jp" else "韩文")
+            + "，但你的输出 **所有字段（sectors.name / sectors.note / movers.name / movers.note）必须是简体中文**。"
+            + "公司名要翻译（例如「ソニーグループ」写成「索尼集团」、「삼성전자」写成「三星电子」），"
+            + "板块名要翻译，note 必须简体中文。symbol 保持原代码不变。"
+        )
+
     user_text = (
         f"以下是关于 {market_label} {report_date.isoformat()} 的搜索结果"
         + ("及盘面结构化统计" if pool_digest else "")
-        + f"。请生成报告。\n\n{user_blob}"
+        + f"。请生成报告。{lang_reminder}\n\n{user_blob}"
     )
 
     if market == "cn_a":

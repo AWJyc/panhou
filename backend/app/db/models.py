@@ -19,7 +19,7 @@ class Market:
     JP = "jp"
     KR = "kr"
 
-    ALL_MVP = (CN_A, US)
+    ALL_MVP = (CN_A, US, JP, KR)
 
 
 class MoveType:
@@ -80,3 +80,35 @@ class MarketMover(Base):
     sealing_amount: Mapped[float | None] = mapped_column(Float, nullable=True)  # 封单金额（亿元）
 
     report: Mapped[Report] = relationship(back_populates="movers")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    byok: Mapped["UserBYOK | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class UserBYOK(Base):
+    """用户保存的 BYOK 配置。api_key 字段是 Fernet 密文，不是明文。"""
+
+    __tablename__ = "user_byok"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(32))
+    api_key_encrypted: Mapped[str] = mapped_column(String)  # Fernet 密文
+    model: Mapped[str] = mapped_column(String(128), default="")
+    base_url: Mapped[str] = mapped_column(String(255), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    user: Mapped[User] = relationship(back_populates="byok")

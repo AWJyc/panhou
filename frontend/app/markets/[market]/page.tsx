@@ -14,7 +14,7 @@ import { formatChineseDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED: Market[] = ["cn_a", "us"];
+const ALLOWED: Market[] = ["cn_a", "us", "jp", "kr"];
 
 function extractHeadline(md: string): { title: string; sub: string } {
   if (!md.trim()) return { title: "数据生成中", sub: "" };

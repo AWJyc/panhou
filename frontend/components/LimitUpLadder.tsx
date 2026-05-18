@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Market, Mover } from "@/lib/types";
 import { StockDeepDiveButton } from "./StockDeepDive";
 import { Sparkline } from "./Sparkline";
@@ -156,9 +157,15 @@ function StockRow({
   const isLimitUp = tone === "rise";
   const { pinned, setPinned } = usePin();
   const isPinned = pinned === m.symbol;
+  // 首次 hover/pin 才挂载 sparkline，避免列表渲染时把 100+ 请求一次性打出去
+  const [interacted, setInteracted] = useState(false);
+  const showSparkline = isLimitUp && (interacted || isPinned);
   return (
     <div
       id={m.symbol ? `stock-${m.symbol}` : undefined}
+      onMouseEnter={() => {
+        if (!interacted) setInteracted(true);
+      }}
       className={`group relative ${
         isPinned
           ? "ring-2 ring-accent ring-offset-2 ring-offset-page rounded-lg"
@@ -190,15 +197,6 @@ function StockRow({
             {formatAmt(m.sealing_amount)}
           </span>
         )}
-        {m.symbol && market === "cn_a" && (
-          <Sparkline
-            market={market}
-            symbol={m.symbol}
-            date={reportDate}
-            width={64}
-            height={20}
-          />
-        )}
         <span className={`font-mono text-[13px] tnum font-medium shrink-0 ${toneText}`}>
           {m.change_pct !== null && m.change_pct !== undefined
             ? `${m.change_pct >= 0 ? "+" : ""}${m.change_pct.toFixed(2)}%`
@@ -210,7 +208,9 @@ function StockRow({
           m={m}
           conceptCount={conceptCount}
           market={market}
+          reportDate={reportDate}
           isPinned={isPinned}
+          showSparkline={showSparkline}
           onClose={() => setPinned(null)}
         />
       )}
@@ -222,13 +222,17 @@ function ReasonCard({
   m,
   conceptCount,
   market,
+  reportDate,
   isPinned,
+  showSparkline,
   onClose,
 }: {
   m: Mover;
   conceptCount: number;
   market: Market;
+  reportDate: string;
   isPinned: boolean;
+  showSparkline: boolean;
   onClose: () => void;
 }) {
   const streak = m.limit_up_streak ?? 1;
@@ -291,6 +295,22 @@ function ReasonCard({
             </span>
           </div>
           <p className="text-[12.5px] leading-[1.55] text-ink">{aiReason}</p>
+        </div>
+      )}
+      {showSparkline && m.symbol && market === "cn_a" && (
+        <div className="mt-2.5 pb-2.5 border-b border-line-subtle">
+          <div className="flex items-baseline gap-1.5 mb-1.5">
+            <span className="font-mono text-[9px] uppercase tracking-wide2 text-ink-muted">
+              当日分时
+            </span>
+          </div>
+          <Sparkline
+            market={market}
+            symbol={m.symbol}
+            date={reportDate}
+            width={260}
+            height={56}
+          />
         </div>
       )}
       <ul className="mt-2.5 space-y-1.5">

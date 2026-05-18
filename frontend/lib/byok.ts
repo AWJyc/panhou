@@ -104,29 +104,35 @@ export async function callQA(args: {
   market: "cn_a" | "us";
   messages: QAMessage[];
 }): Promise<{ answer: string; model: string }> {
-  const cfg = loadBYOK();
-  if (!cfg) {
-    throw new Error("尚未配置 AI 模型，请到设置页填入。");
+  // 登录用户：服务端读 DB 加密 BYOK；身份靠 cookie。
+  // 老用户兜底（未登录）：localStorage 里的旧 BYOK 也仍能用。
+  const localCfg = loadBYOK();
+  const body: Record<string, unknown> = {
+    market: args.market,
+    messages: args.messages,
+  };
+  if (localCfg) {
+    body.provider = localCfg.provider;
+    body.api_key = localCfg.apiKey;
+    body.model = localCfg.model || "";
+    body.base_url = localCfg.baseUrl || "";
   }
   const res = await fetch("/api/qa", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      market: args.market,
-      provider: cfg.provider,
-      api_key: cfg.apiKey,
-      model: cfg.model || "",
-      base_url: cfg.baseUrl || "",
-      messages: args.messages,
-    }),
+    credentials: "include",
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     let detail = await res.text();
     try {
-      const body = JSON.parse(detail);
-      detail = body.detail || body.error || detail;
+      const parsed = JSON.parse(detail);
+      detail = parsed.detail || parsed.error || detail;
     } catch {
       /* keep raw */
+    }
+    if (res.status === 401) {
+      throw new Error("请先登录或在设置页填入 AI 模型 key");
     }
     throw new Error(detail || `请求失败 ${res.status}`);
   }

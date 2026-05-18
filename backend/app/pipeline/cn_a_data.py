@@ -127,6 +127,7 @@ def _fetch_a_indices_eastmoney() -> list[dict[str, Any]]:
     records = df.to_dict(orient="records")
     wanted = {"上证指数", "深证成指", "创业板指"}
     out = []
+    today_iso = date.today().isoformat()
     for r in records:
         name = str(r.get("名称") or "").strip()
         if name not in wanted:
@@ -137,6 +138,8 @@ def _fetch_a_indices_eastmoney() -> list[dict[str, Any]]:
                 "name": name,
                 "close": _to_float(r.get("最新价")),
                 "change_pct": _to_float(r.get("涨跌幅")),
+                # spot 是实时接口，盘后调用 ≈ 今日收盘；盘前 / 盘中调用相当于实时盘中
+                "date": today_iso,
             }
         )
     return out
@@ -167,6 +170,7 @@ def _fetch_a_indices_sina() -> list[dict[str, Any]]:
                 "name": name,
                 "close": close,
                 "change_pct": (close - prev_close) / prev_close * 100,
+                "date": str(last.get("date") or "")[:10],
             }
         )
     return out

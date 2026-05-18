@@ -27,9 +27,35 @@ def us_queries(d: date) -> list[str]:
     ]
 
 
+def jp_queries(d: date) -> list[str]:
+    ds = d.strftime("%Y年%m月%d日")
+    en = d.strftime("%B %d %Y")
+    return [
+        f"日経平均 終値 {ds}",
+        f"TOPIX セクター 業種 {ds}",
+        f"日本株 注目銘柄 上昇 下落 {ds}",
+        f"Nikkei 225 close summary {en}",
+        f"Bank of Japan policy yen market {en}",
+    ]
+
+
+def kr_queries(d: date) -> list[str]:
+    ds = d.strftime("%Y년 %m월 %d일")
+    en = d.strftime("%B %d %Y")
+    return [
+        f"코스피 종가 {ds}",
+        f"코스닥 업종 {ds}",
+        f"한국 주식 시장 마감 {ds}",
+        f"KOSPI close summary {en}",
+        f"Samsung SK Hynix Korea stocks {en}",
+    ]
+
+
 QUERY_BUILDERS = {
     "cn_a": cn_a_queries,
     "us": us_queries,
+    "jp": jp_queries,
+    "kr": kr_queries,
 }
 
 

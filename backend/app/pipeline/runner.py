@@ -28,6 +28,11 @@ from app.pipeline.cn_a_data import (
 from app.pipeline.market_queries import build_queries
 from app.pipeline.summarizer import generate_limit_up_reasons, summarize
 from app.pipeline.tavily_client import dedupe_and_compact, search_many
+from app.pipeline.jp_kr_data import (
+    fetch_jp_indices,
+    fetch_kr_indices,
+    summarize_idx_for_llm,
+)
 from app.pipeline.us_data import (
     fetch_us_indices,
     fetch_us_sectors,
@@ -45,6 +50,10 @@ async def run_pipeline(market: str, report_date: date) -> int:
             return await _run_cn_a(report_date)
         if market == "us":
             return await _run_us(report_date)
+        if market == "jp":
+            return await _run_jp(report_date)
+        if market == "kr":
+            return await _run_kr(report_date)
         return await _run_default(market, report_date)
     except Exception as e:
         log.exception("pipeline failed market=%s date=%s", market, report_date)
@@ -53,6 +62,68 @@ async def run_pipeline(market: str, report_date: date) -> int:
 
 def run_pipeline_sync(market: str, report_date: date) -> int:
     return asyncio.run(run_pipeline(market, report_date))
+
+
+async def _run_jp(report_date: date) -> int:
+    return await _run_overseas(market="jp", label="日股", report_date=report_date, fetch_idx=fetch_jp_indices)
+
+
+async def _run_kr(report_date: date) -> int:
+    return await _run_overseas(market="kr", label="韩股", report_date=report_date, fetch_idx=fetch_kr_indices)
+
+
+async def _run_overseas(
+    market: str,
+    label: str,
+    report_date: date,
+    fetch_idx,
+) -> int:
+    """日/韩股通用：结构化只有指数，其他（sectors、movers）走 LLM 从 Tavily 提取。"""
+    queries = build_queries(market, report_date)
+    indices, batches = await asyncio.gather(
+        fetch_idx(),
+        search_many(queries, max_results=8),
+    )
+    sources = dedupe_and_compact(batches)
+
+    if not indices and not sources:
+        return _persist_failed(market, report_date, "no data from any source", batches)
+
+    # report_date 用 indices 实际数据日（避免 UTC vs Asia/Shanghai 跨日导致重复 row）
+    real_dates = [str(i.get("date") or "")[:10] for i in indices if i.get("date")]
+    if real_dates:
+        try:
+            report_date = date.fromisoformat(max(real_dates))
+        except ValueError:
+            pass
+
+    digest = summarize_idx_for_llm(label, indices) if indices else ""
+    log.info(
+        "%s data: indices=%d tavily_sources=%d",
+        market,
+        len(indices),
+        len(sources),
+    )
+
+    structured, model_id = summarize(market, report_date, sources, pool_digest=digest or None)
+    sectors = _build_sectors(structured.get("sectors") or [])
+    movers = _build_movers_from_llm(structured.get("movers") or [])
+
+    raw_payload = {
+        "tavily_sources": sources,
+        "indices": indices,
+        "digest": digest,
+    }
+    return _persist(
+        market,
+        report_date,
+        summary_md=structured.get("summary_md", ""),
+        sources=raw_payload,
+        model_id=model_id,
+        sectors=sectors,
+        movers=movers,
+        indices=indices,
+    )
 
 
 async def _run_default(market: str, report_date: date) -> int:
@@ -92,6 +163,18 @@ async def _run_cn_a(report_date: date) -> int:
 
     if not zt_pool and not dt_pool and not industries and not sources:
         return _persist_failed("cn_a", report_date, "no data from any source", batches)
+
+    # 用 indices 实际数据日推算 report_date，避免盘前/手动触发时
+    # report_date 写"今天"、但 indices 实际是上个交易日"昨天" 的错位
+    real_dates = [str(i.get("date") or "")[:10] for i in indices if i.get("date")]
+    if real_dates:
+        try:
+            real = date.fromisoformat(max(real_dates))
+            if real != report_date:
+                log.info("cn_a report_date adjusted: %s → %s (per indices)", report_date, real)
+            report_date = real
+        except ValueError:
+            pass
 
     pool_digest_parts = [
         summarize_pool_for_llm(zt_pool, dt_pool),
@@ -162,7 +245,7 @@ async def _run_cn_a(report_date: date) -> int:
         "concepts_count": len(concepts),
         "pool_digest": pool_digest,
     }
-    return _persist(
+    report_id = _persist(
         "cn_a",
         report_date,
         summary_md=structured.get("summary_md", ""),
@@ -173,6 +256,17 @@ async def _run_cn_a(report_date: date) -> int:
         indices=indices,
         themes=themes_out,
     )
+
+    # 预热涨停股 sparkline 缓存，让前端打开页面瞬间命中
+    try:
+        from app.api.stocks import prewarm_cn_a_sparklines
+
+        symbols = [s["symbol"] for s in zt_pool if s.get("symbol")]
+        await prewarm_cn_a_sparklines(symbols, report_date.isoformat())
+    except Exception as e:
+        log.warning("sparkline prewarm 失败（不影响 pipeline）: %s", e)
+
+    return report_id
 
 
 def _patch_sector_pcts(

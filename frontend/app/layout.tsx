@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import "./globals.css";
+import { AuthProvider } from "@/components/AuthContext";
 
 export const metadata: Metadata = {
   title: "盘后 · POST-CLOSE",
@@ -15,7 +16,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className="font-sans bg-page text-ink">{children}</body>
+      <body className="font-sans bg-page text-ink">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

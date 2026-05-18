@@ -1,73 +1,138 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  BYOKConfig,
-  BYOKProvider,
-  PROVIDER_OPTIONS,
-  clearBYOK,
-  loadBYOK,
-  maskKey,
-  saveBYOK,
-} from "@/lib/byok";
+import { BYOKProvider, PROVIDER_OPTIONS } from "@/lib/byok";
+
+interface ServerBYOK {
+  provider: BYOKProvider;
+  model: string;
+  base_url: string;
+  has_key: boolean;
+}
+
+async function fetchServerBYOK(): Promise<ServerBYOK | null> {
+  const res = await fetch("/api/user/byok", { credentials: "include" });
+  if (res.status === 401) return null;
+  if (!res.ok) throw new Error(`load failed ${res.status}`);
+  const body = (await res.json()) as ServerBYOK | null;
+  return body;
+}
+
+async function saveServerBYOK(payload: {
+  provider: string;
+  api_key: string;
+  model: string;
+  base_url: string;
+}): Promise<ServerBYOK> {
+  const res = await fetch("/api/user/byok", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let detail = await res.text();
+    try {
+      detail = JSON.parse(detail).detail ?? detail;
+    } catch {
+      /* keep */
+    }
+    throw new Error(detail || `save failed ${res.status}`);
+  }
+  return (await res.json()) as ServerBYOK;
+}
+
+async function deleteServerBYOK(): Promise<void> {
+  const res = await fetch("/api/user/byok", {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`delete failed ${res.status}`);
+}
 
 export function BYOKForm() {
   const [provider, setProvider] = useState<BYOKProvider>("deepseek");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [saved, setSaved] = useState<BYOKConfig | null>(null);
+  const [saved, setSaved] = useState<ServerBYOK | null>(null);
   const [showKey, setShowKey] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const cfg = loadBYOK();
-    if (cfg) {
-      setSaved(cfg);
-      setProvider(cfg.provider);
-      setApiKey(cfg.apiKey);
-      setModel(cfg.model || "");
-      setBaseUrl(cfg.baseUrl || "");
-    }
+    fetchServerBYOK()
+      .then((cfg) => {
+        if (cfg) {
+          setSaved(cfg);
+          setProvider(cfg.provider);
+          setModel(cfg.model || "");
+          setBaseUrl(cfg.base_url || "");
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const opt = PROVIDER_OPTIONS.find((p) => p.value === provider)!;
 
-  function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!apiKey.trim()) {
       setFlash("API key 不能为空");
       return;
     }
-    const cfg: BYOKConfig = {
-      provider,
-      apiKey: apiKey.trim(),
-      model: model.trim() || undefined,
-      baseUrl: baseUrl.trim() || undefined,
-    };
-    saveBYOK(cfg);
-    setSaved(cfg);
-    setFlash("已保存到此浏览器");
-    setTimeout(() => setFlash(null), 2500);
+    setBusy(true);
+    setFlash(null);
+    try {
+      const cfg = await saveServerBYOK({
+        provider,
+        api_key: apiKey.trim(),
+        model: model.trim(),
+        base_url: baseUrl.trim(),
+      });
+      setSaved(cfg);
+      setApiKey("");
+      setFlash("已加密保存到服务端");
+      setTimeout(() => setFlash(null), 2500);
+    } catch (e) {
+      setFlash(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleClear() {
-    clearBYOK();
-    setSaved(null);
-    setApiKey("");
-    setModel("");
-    setBaseUrl("");
-    setFlash("已清除");
-    setTimeout(() => setFlash(null), 2000);
+  async function handleClear() {
+    setBusy(true);
+    try {
+      await deleteServerBYOK();
+      setSaved(null);
+      setApiKey("");
+      setModel("");
+      setBaseUrl("");
+      setFlash("已清除");
+      setTimeout(() => setFlash(null), 2000);
+    } catch (e) {
+      setFlash(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="text-[13px] text-ink-muted">加载已保存的配置...</div>;
   }
 
   return (
     <div className="rounded-2xl border border-line bg-surface overflow-hidden">
       <div className="px-5 py-3 border-b border-line-subtle flex items-baseline justify-between">
         <span className="eyebrow">配置</span>
-        {saved && (
-          <span className="font-mono text-[10px] text-ink-muted">
-            当前：{saved.provider} · {maskKey(saved.apiKey)}
+        {saved?.has_key && (
+          <span className="font-mono text-[10px] text-rise">
+            ✓ 已配置 · {saved.provider} · {saved.model || "默认 model"}
           </span>
         )}
       </div>
@@ -99,7 +164,7 @@ export function BYOKForm() {
               type={showKey ? "text" : "password"}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
+              placeholder={saved?.has_key ? "重新输入以更新（不显示历史值）" : "sk-..."}
               autoComplete="off"
               spellCheck={false}
               className="flex-1 bg-page border border-line font-mono text-[13px] px-3 py-2 rounded-lg focus:border-accent outline-none transition-colors"
@@ -113,7 +178,7 @@ export function BYOKForm() {
             </button>
           </div>
           <p className="font-mono text-[11px] text-ink-muted mt-1.5">
-            仅保存在你这台浏览器 · 不上传服务端 · 不进日志
+            服务端用 Fernet 加密落库 · 明文不进日志、不返回前端
           </p>
         </Field>
 
@@ -140,15 +205,17 @@ export function BYOKForm() {
         <div className="flex items-center gap-3 pt-2">
           <button
             type="submit"
-            className="px-5 py-2 rounded-lg bg-inverse text-ink-inverse text-[13px] font-medium hover:bg-accent transition-colors"
+            disabled={busy}
+            className="px-5 py-2 rounded-lg bg-inverse text-ink-inverse text-[13px] font-medium hover:bg-accent transition-colors disabled:opacity-50"
           >
-            保存
+            {busy ? "保存中..." : "保存"}
           </button>
-          {saved && (
+          {saved?.has_key && (
             <button
               type="button"
               onClick={handleClear}
-              className="px-5 py-2 rounded-lg border border-fall/40 text-fall-deep text-[13px] hover:bg-fall-soft transition-colors"
+              disabled={busy}
+              className="px-5 py-2 rounded-lg border border-fall/40 text-fall-deep text-[13px] hover:bg-fall-soft transition-colors disabled:opacity-50"
             >
               清除
             </button>

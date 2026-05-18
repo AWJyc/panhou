@@ -21,6 +21,57 @@ _cache: dict[tuple, dict[str, Any]] = {}
 _lock = asyncio.Lock()
 
 
+async def prewarm_cn_a_sparklines(symbols: list[str], target_date: str) -> int:
+    """盘后 pipeline 调用：批量预热涨停股 sparkline 缓存。
+
+    并发受 akshare 单线程池限制（实际串行），但能跳过已缓存项。
+    返回成功抓到非空 points 的股票数。
+    """
+    if not symbols:
+        return 0
+    log.info("sparkline prewarm: %d symbols for %s", len(symbols), target_date)
+    sem = asyncio.Semaphore(5)
+    success = 0
+    success_lock = asyncio.Lock()
+
+    async def one(sym: str) -> None:
+        nonlocal success
+        cache_key = ("cn_a", sym, target_date)
+        async with _lock:
+            if cache_key in _cache:
+                return
+        async with sem:
+            try:
+                data = await run_akshare(_fetch_cn_a_intraday, sym, target_date)
+            except Exception as e:
+                log.warning("prewarm %s 失败: %s", sym, e)
+                data = None
+        if data is None:
+            out = {
+                "symbol": sym,
+                "date": target_date,
+                "points": [],
+                "prev_close": None,
+                "error": "fetch_failed",
+            }
+        else:
+            out = {
+                "symbol": sym,
+                "date": target_date,
+                "points": data["points"],
+                "prev_close": data["prev_close"],
+            }
+            if data.get("points"):
+                async with success_lock:
+                    success += 1
+        async with _lock:
+            _cache[cache_key] = out
+
+    await asyncio.gather(*(one(s) for s in symbols), return_exceptions=True)
+    log.info("sparkline prewarm done: %d/%d cached with data", success, len(symbols))
+    return success
+
+
 def _to_float(v: Any) -> float | None:
     if v is None:
         return None

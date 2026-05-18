@@ -29,6 +29,16 @@ class Settings(BaseSettings):
 
     admin_rebuild_token: str = "change-me"
 
+    # 用户系统
+    # JWT 签名密钥；用 `openssl rand -hex 32` 生成。生产必须改成强随机
+    auth_secret: str = "dev-only-please-change-in-prod-32-chars-min"
+    auth_token_ttl_days: int = 30
+    # BYOK key 服务端落库时的 Fernet 加密密钥（base64，44 字符）。
+    # 生成方式：python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    byok_encryption_key: str = ""
+    # 生产打开（HTTPS）；开发用 HTTP 时设 false
+    cookie_secure: bool = False
+
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     scheduler_timezone: str = "Asia/Shanghai"
 
