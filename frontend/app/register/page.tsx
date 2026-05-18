@@ -1,12 +1,20 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { Suspense, useState, FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { useAuth } from "@/components/AuthContext";
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-ink-muted">加载中...</div>}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const { register } = useAuth();
   const router = useRouter();
   const sp = useSearchParams();
