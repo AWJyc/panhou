@@ -61,7 +61,8 @@ def start_scheduler() -> BackgroundScheduler:
     )
     sched.add_job(
         _run_us,
-        CronTrigger(day_of_week="tue-sat", hour=6, minute=0),
+        # 美东周一 16:00 收盘 = CST 周二 05:00；推到 08:00 留 3 小时让 sina/akshare 归档 日K
+        CronTrigger(day_of_week="tue-sat", hour=8, minute=0),
         id="us_daily",
         replace_existing=True,
     )
@@ -69,7 +70,7 @@ def start_scheduler() -> BackgroundScheduler:
     sched.start()
     _scheduler = sched
     log.info(
-        "scheduler started: jp@14:30, kr@15:00, cn_a@15:30 mon-fri, us@06:00 tue-sat (%s)",
+        "scheduler started: jp@14:30, kr@15:00, cn_a@15:30 mon-fri, us@08:00 tue-sat (%s)",
         settings.scheduler_timezone,
     )
     return sched
