@@ -64,6 +64,9 @@ def qa(
     model = req.model
     base_url = req.base_url
     if user:
+        # 登录但未验证邮箱 → 锁定 BYOK 问答（防止灌水/滥用）
+        if not user.email_verified:
+            raise HTTPException(403, "请先验证邮箱后再使用 AI 问答")
         # 登录用户：服务端读 DB 加密 key，忽略 body 里的 api_key（避免泄露给前端）
         cfg = db.execute(select(UserBYOK).where(UserBYOK.user_id == user.id)).scalar_one_or_none()
         if not cfg:

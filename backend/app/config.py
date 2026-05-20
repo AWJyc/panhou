@@ -50,6 +50,23 @@ class Settings(BaseSettings):
     notify_enabled: bool = True
     notify_level: str = "all"  # "all" | "failure"
 
+    # 阿里云 DM SMTP（发注册验证码 + 密码重置码）
+    # host: smtpdm.aliyun.com（中国大陆）/ smtpdm-ap-southeast-1.aliyuncs.com（香港、国际）
+    # user: 你在 DM 控制台创建的发信地址，例如 noreply@panhou.xyz
+    # password: 创建发信地址时设的 SMTP 密码（不是阿里云账号密码）
+    smtp_host: str = ""
+    smtp_port: int = 465  # SSL/TLS
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_name: str = "panhou"  # 收件人看到的发件人显示名
+    # 邮件正文里"前往验证"等链接的前缀；生产填 https://panhou.xyz
+    app_base_url: str = "http://localhost:3000"
+
+    # 邮箱验证码策略
+    verify_code_ttl_seconds: int = 900  # 15 分钟
+    verify_code_max_attempts: int = 5
+    verify_code_resend_cooldown_seconds: int = 60
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

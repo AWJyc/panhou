@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import admin, auth, health, qa, reports, stocks, user_byok
 from app.config import get_settings
 from app.db.base import Base
+from app.db.migrate import run_migrations
 from app.db.session import engine
 from app.scheduler.jobs import shutdown_scheduler, start_scheduler
 
@@ -25,6 +26,7 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine)
     start_scheduler()
     try:
         yield

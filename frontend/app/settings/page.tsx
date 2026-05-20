@@ -33,10 +33,12 @@ export default function Settings() {
               <div className="mt-8">
                 {loading ? (
                   <div className="text-[13px] text-ink-muted">加载中...</div>
-                ) : user ? (
-                  <BYOKForm />
-                ) : (
+                ) : !user ? (
                   <LoginGate />
+                ) : !user.email_verified ? (
+                  <VerifyGate />
+                ) : (
+                  <BYOKForm />
                 )}
               </div>
             </div>
@@ -72,6 +74,27 @@ export default function Settings() {
         </section>
       </main>
     </>
+  );
+}
+
+function VerifyGate() {
+  return (
+    <div className="rounded-2xl border border-amber-400/40 bg-amber-400/5 p-6">
+      <h2 className="text-[18px] font-semibold text-ink mb-2">
+        请先验证邮箱
+      </h2>
+      <p className="text-[13.5px] text-ink-secondary leading-[1.6]">
+        为防止滥用 AI 接口，保存 API key 需要先完成邮箱验证。验证邮件刚刚已发到你的注册邮箱，输入 6 位验证码即可解锁。
+      </p>
+      <div className="mt-5">
+        <Link
+          href="/verify-email?next=/settings"
+          className="px-4 py-2 rounded-lg bg-amber-500 text-white text-[13px] font-medium hover:opacity-90 transition-opacity"
+        >
+          去验证邮箱
+        </Link>
+      </div>
+    </div>
   );
 }
 

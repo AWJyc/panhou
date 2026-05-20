@@ -1,26 +1,15 @@
 "use client";
 
-import { Suspense, useState, FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { useAuth } from "@/components/AuthContext";
 
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-ink-muted">加载中...</div>}>
-      <LoginForm />
-    </Suspense>
-  );
-}
-
-function LoginForm() {
-  const { login } = useAuth();
+export default function ForgotPasswordPage() {
+  const { forgotPassword } = useAuth();
   const router = useRouter();
-  const sp = useSearchParams();
-  const next = sp.get("next") || "/";
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -29,8 +18,9 @@ function LoginForm() {
     setErr(null);
     setBusy(true);
     try {
-      await login(email, password);
-      router.push(next);
+      await forgotPassword(email);
+      // 不管邮箱是否存在都跳到 reset 页 —— 防枚举
+      router.push(`/reset-password?email=${encodeURIComponent(email)}`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -44,36 +34,24 @@ function LoginForm() {
       <main className="bg-page min-h-screen">
         <section className="max-w-md mx-auto px-6 py-20">
           <h1 className="text-[40px] font-semibold tracking-tight3 text-ink mb-2">
-            登录
+            重置密码
           </h1>
           <p className="text-[14px] text-ink-secondary mb-8">
-            登录后可在多设备同步你的 BYOK 配置并使用 AI 深挖。
+            输入注册邮箱，我们会发一封 6 位数字验证码。
           </p>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
               <label className="block text-[12px] text-ink-muted uppercase tracking-wide2 mb-1.5">
-                邮箱
+                注册邮箱
               </label>
               <input
                 type="email"
                 required
+                autoFocus
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-line bg-surface text-ink text-[14px] focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div>
-              <label className="block text-[12px] text-ink-muted uppercase tracking-wide2 mb-1.5">
-                密码
-              </label>
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg border border-line bg-surface text-ink text-[14px] focus:outline-none focus:border-accent"
               />
             </div>
@@ -89,27 +67,16 @@ function LoginForm() {
               disabled={busy}
               className="w-full py-2.5 rounded-lg bg-accent text-ink-inverse font-medium text-[14px] hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {busy ? "登录中..." : "登录"}
+              {busy ? "发送中..." : "发送验证码"}
             </button>
           </form>
 
-          <div className="mt-6 flex items-center justify-between text-[13px] text-ink-secondary">
-            <span>
-              没有账号？{" "}
-              <Link
-                href={`/register?next=${encodeURIComponent(next)}`}
-                className="text-accent hover:underline"
-              >
-                立即注册
-              </Link>
-            </span>
-            <Link
-              href="/forgot-password"
-              className="text-ink-muted hover:text-accent hover:underline"
-            >
-              忘记密码？
+          <p className="mt-6 text-[13px] text-ink-secondary">
+            想起密码了？{" "}
+            <Link href="/login" className="text-accent hover:underline">
+              去登录
             </Link>
-          </div>
+          </p>
         </section>
       </main>
     </>

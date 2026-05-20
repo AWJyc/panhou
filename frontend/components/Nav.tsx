@@ -26,6 +26,7 @@ const TABS: TabDef[] = [
 export function Nav({ active }: Props) {
   return (
     <header className="sticky top-0 z-30 bg-page/90 backdrop-blur-sm border-b border-line-subtle">
+      <UnverifiedBanner />
       <div className="max-w-content mx-auto px-6 lg:px-8 h-16 flex items-center gap-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0 group">
@@ -91,6 +92,29 @@ export function Nav({ active }: Props) {
         <NavRight />
       </div>
     </header>
+  );
+}
+
+function UnverifiedBanner() {
+  const { user, loading } = useAuth();
+  if (loading || !user || user.email_verified) return null;
+  return (
+    <div className="bg-amber-400/15 border-b border-amber-400/30 text-[13px]">
+      <div className="max-w-content mx-auto px-6 lg:px-8 py-2 flex items-center justify-between gap-4">
+        <span className="text-ink-secondary">
+          <span className="font-medium text-ink">邮箱未验证</span>
+          <span className="ml-2">
+            AI 问答 / 保存 API key 已暂时锁定，验证后即可解锁。
+          </span>
+        </span>
+        <Link
+          href="/verify-email"
+          className="shrink-0 px-3 py-1 rounded-full bg-amber-500 text-white hover:opacity-90 text-[12px] font-medium"
+        >
+          去验证
+        </Link>
+      </div>
+    </div>
   );
 }
 

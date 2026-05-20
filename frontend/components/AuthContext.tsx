@@ -11,6 +11,7 @@ import {
 
 export interface AuthUser {
   email: string;
+  email_verified: boolean;
 }
 
 interface AuthState {
@@ -20,6 +21,14 @@ interface AuthState {
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  verifyEmail: (code: string) => Promise<void>;
+  resendVerifyCode: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (
+    email: string,
+    code: string,
+    newPassword: string
+  ) => Promise<void>;
 }
 
 const Ctx = createContext<AuthState>({
@@ -29,6 +38,10 @@ const Ctx = createContext<AuthState>({
   register: async () => {},
   logout: async () => {},
   refresh: async () => {},
+  verifyEmail: async () => {},
+  resendVerifyCode: async () => {},
+  forgotPassword: async () => {},
+  resetPassword: async () => {},
 });
 
 async function postJSON(url: string, body?: unknown): Promise<unknown> {
@@ -74,29 +87,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const login = useCallback(
-    async (email: string, password: string) => {
-      const u = (await postJSON("/api/auth/login", { email, password })) as AuthUser;
-      setUser(u);
-    },
-    []
-  );
+  const login = useCallback(async (email: string, password: string) => {
+    const u = (await postJSON("/api/auth/login", { email, password })) as AuthUser;
+    setUser(u);
+  }, []);
 
-  const register = useCallback(
-    async (email: string, password: string) => {
-      const u = (await postJSON("/api/auth/register", { email, password })) as AuthUser;
-      setUser(u);
-    },
-    []
-  );
+  const register = useCallback(async (email: string, password: string) => {
+    const u = (await postJSON("/api/auth/register", {
+      email,
+      password,
+    })) as AuthUser;
+    setUser(u);
+  }, []);
 
   const logout = useCallback(async () => {
     await postJSON("/api/auth/logout");
     setUser(null);
   }, []);
 
+  const verifyEmail = useCallback(async (code: string) => {
+    const u = (await postJSON("/api/auth/verify-email", { code })) as AuthUser;
+    setUser(u);
+  }, []);
+
+  const resendVerifyCode = useCallback(async () => {
+    await postJSON("/api/auth/resend-verify-code");
+  }, []);
+
+  const forgotPassword = useCallback(async (email: string) => {
+    await postJSON("/api/auth/forgot-password", { email });
+  }, []);
+
+  const resetPassword = useCallback(
+    async (email: string, code: string, newPassword: string) => {
+      await postJSON("/api/auth/reset-password", {
+        email,
+        code,
+        new_password: newPassword,
+      });
+    },
+    []
+  );
+
   return (
-    <Ctx.Provider value={{ user, loading, login, register, logout, refresh }}>
+    <Ctx.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+        refresh,
+        verifyEmail,
+        resendVerifyCode,
+        forgotPassword,
+        resetPassword,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

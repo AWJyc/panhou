@@ -1,6 +1,16 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -88,12 +98,46 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     byok: Mapped["UserBYOK | None"] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
+    email_codes: Mapped[list["EmailCode"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class EmailCodeKind:
+    VERIFY = "verify"
+    RESET = "reset"
+    ALL = (VERIFY, RESET)
+
+
+class EmailCode(Base):
+    """注册激活 + 密码重置用的 6 位数字验证码。
+
+    存 code_hash（bcrypt）而非明文，防 DB dump 后直接回放。
+    每条 code 有 expires_at + attempts 上限，超过即作废。
+    """
+
+    __tablename__ = "email_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16), index=True)
+    code_hash: Mapped[str] = mapped_column(String(255))
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+    user: Mapped[User] = relationship(back_populates="email_codes")
 
 
 class UserBYOK(Base):

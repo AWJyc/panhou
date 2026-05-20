@@ -62,6 +62,8 @@ def put_byok(
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
+    if not user.email_verified:
+        raise HTTPException(403, "请先验证邮箱后再保存 API key")
     if payload.provider not in _ALLOWED_PROVIDERS:
         raise HTTPException(400, f"不支持的 provider: {payload.provider}")
     cipher = encrypt_key(payload.api_key)
