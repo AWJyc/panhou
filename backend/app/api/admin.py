@@ -19,8 +19,10 @@ def rebuild(
     market: str,
     background_tasks: BackgroundTasks,
     report_date: date_cls | None = None,
+    force: bool = False,
     x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-) -> dict[str, str]:
+) -> dict[str, str | bool]:
+    """手动触发 pipeline。force=true 旁路非交易日检查（用于调试或补数据）。"""
     _verify_token(x_admin_token)
     if market not in Market.ALL_MVP:
         raise HTTPException(status_code=400, detail=f"unsupported market: {market}")
@@ -28,11 +30,12 @@ def rebuild(
     from app.pipeline.runner import run_pipeline_sync
 
     target_date = report_date or date_cls.today()
-    background_tasks.add_task(run_pipeline_sync, market, target_date)
+    background_tasks.add_task(run_pipeline_sync, market, target_date, force=force)
     return {
         "status": "scheduled",
         "market": market,
         "report_date": target_date.isoformat(),
+        "force": force,
     }
 
 

@@ -22,6 +22,8 @@ dependencies = [
     "bcrypt>=4.0",
     "PyJWT>=2.9",
     "cryptography>=43",
+    "chinesecalendar>=1.10",
+    "holidays>=0.55",
 ]
 
 [project.optional-dependencies]

@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from app.db.models import MarketMover, MarketSector, Report
 from app.db.session import SessionLocal
+from app.pipeline.trading_calendar import is_trading_day
 from app.pipeline.cn_a_data import (
     fetch_a_indices,
     fetch_concept_boards,
@@ -44,8 +45,17 @@ from app.pipeline.us_data import (
 log = logging.getLogger(__name__)
 
 
-async def run_pipeline(market: str, report_date: date) -> int:
-    log.info("pipeline start market=%s date=%s", market, report_date)
+async def run_pipeline(market: str, report_date: date, *, force: bool = False) -> int:
+    """跑 market 的 pipeline。
+
+    force=False 时若 report_date 是该 market 的非交易日 → 跳过（不入库不通知），return -1。
+    force=True 用于手动 rebuild 想强制跑（补数据/调试）。
+    """
+    if not force and not is_trading_day(market, report_date):
+        log.info("pipeline skipped (non-trading day) market=%s date=%s", market, report_date)
+        return -1
+
+    log.info("pipeline start market=%s date=%s force=%s", market, report_date, force)
     started = time.monotonic()
     forced_status: str | None = None
     err_msg: str | None = None
@@ -94,8 +104,8 @@ def _notify_safe(
         log.warning("notify hook 异常 (吞掉): %s", e)
 
 
-def run_pipeline_sync(market: str, report_date: date) -> int:
-    return asyncio.run(run_pipeline(market, report_date))
+def run_pipeline_sync(market: str, report_date: date, *, force: bool = False) -> int:
+    return asyncio.run(run_pipeline(market, report_date, force=force))
 
 
 async def _run_jp(report_date: date) -> int:
