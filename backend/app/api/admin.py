@@ -34,3 +34,31 @@ def rebuild(
         "market": market,
         "report_date": target_date.isoformat(),
     }
+
+
+@router.post("/notify-test")
+def notify_test(
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+) -> dict[str, str]:
+    """发一条测试卡片到飞书，验证 webhook 配置是否正确。"""
+    _verify_token(x_admin_token)
+    settings = get_settings()
+    if not settings.feishu_webhook_url:
+        raise HTTPException(status_code=400, detail="FEISHU_WEBHOOK_URL 未配置")
+    from app.notify.feishu import send_card
+
+    try:
+        send_card(
+            settings.feishu_webhook_url,
+            title="🛠️ panhou 告警测试",
+            content_lines=[
+                "**这是一条测试消息**",
+                "如果你看到这条卡片，说明 webhook 配置正确。",
+                "之后 pipeline 跑完会自动推送成功/失败状态到这个群。",
+            ],
+            color="blue",
+            secret=settings.feishu_webhook_secret or None,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"飞书推送失败: {e}")
+    return {"status": "sent"}

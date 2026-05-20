@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     scheduler_timezone: str = "Asia/Shanghai"
 
+    # 飞书自定义机器人 webhook（pipeline 跑完发告警）
+    # 建群 → 设置 → 群机器人 → 添加机器人 → 自定义机器人 → 复制 Webhook 地址
+    # secret 可选；如开了"签名校验"必填
+    feishu_webhook_url: str = ""
+    feishu_webhook_secret: str = ""
+    notify_enabled: bool = True
+    notify_level: str = "all"  # "all" | "failure"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
