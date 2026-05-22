@@ -216,9 +216,22 @@ def _openai_compat_call(
             try:
                 return json.loads(raw)
             except json.JSONDecodeError as e:
-                # LLM 偶尔产畸形 JSON（少逗号/多逗号/截断），用 json_repair 兜底
+                # 兜底 1：raw_decode 取第一个完整 JSON，忽略尾部噪声
+                # （DeepSeek 偶尔在 tool args 后面贴 markdown 或第二个对象，引发 "Extra data"）
+                try:
+                    decoded, _ = json.JSONDecoder().raw_decode(raw)
+                    if isinstance(decoded, dict):
+                        log.warning(
+                            "openai_compat: tool args 含尾部噪声, raw_decode 取首段 dict 成功 (orig=%s)",
+                            e,
+                        )
+                        return decoded
+                except Exception:
+                    pass
+
+                # 兜底 2：json_repair 修复畸形 JSON
                 log.warning(
-                    "openai_compat: bad JSON in tool args (%s); attempting repair. raw=%r",
+                    "openai_compat: bad JSON in tool args (%s); attempting repair. raw_head=%r",
                     e,
                     raw[:200],
                 )
@@ -228,6 +241,16 @@ def _openai_compat_call(
                     repaired = repair_json(raw, return_objects=True)
                     if isinstance(repaired, dict):
                         return repaired
+                    # repair 有时把 "{...}{...}" 当 list；取首个 dict
+                    if isinstance(repaired, list):
+                        first_dict = next(
+                            (x for x in repaired if isinstance(x, dict)), None
+                        )
+                        if first_dict is not None:
+                            log.warning(
+                                "openai_compat: repair 返回 list，取首个 dict 元素"
+                            )
+                            return first_dict
                     raise RuntimeError(
                         f"openai_compat: repair returned non-dict: {type(repaired)}"
                     )
