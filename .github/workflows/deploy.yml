@@ -1,79 +1,77 @@
 name: Deploy to Aliyun
 
-  on:
-    push:
-      branches: [main]
-      paths:
-        - "backend/**"
-        - "frontend/**"
-        - "deploy/**"
-        - ".github/workflows/deploy.yml"
-    workflow_dispatch:
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "deploy/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
 
-  concurrency:
-    group: deploy-production
-    cancel-in-progress: false
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
-  jobs:
-    deploy:
-      runs-on: ubuntu-latest
-      timeout-minutes: 15
-      steps:
-        - name: Sync env + deploy + restart
-          uses: appleboy/ssh-action@v1.2.0
-          with:
-            host: ${{ secrets.ECS_HOST }}
-            username: ${{ secrets.ECS_USER }}
-            key: ${{ secrets.ECS_SSH_KEY }}
-            port: ${{ secrets.ECS_PORT || 22 }}
-            envs: FEISHU_WEBHOOK_URL,FEISHU_WEBHOOK_SECRET
-            script_stop: true
-            script: |
-              set -e
-              ENV_FILE=/etc/tradeagent/.env
-              upsert() {
-                local key="$1" val="$2"
-                [ -z "$val" ] && return 0
-                if sudo grep -q "^$key=" "$ENV_FILE"; then
-                  sudo sed -i "s|^$key=.*|$key=$val|" "$ENV_FILE"
-                else
-                  echo "$key=$val" | sudo tee -a "$ENV_FILE" >/dev/null
-                fi
-              }
-              upsert FEISHU_WEBHOOK_URL    "$FEISHU_WEBHOOK_URL"
-              upsert FEISHU_WEBHOOK_SECRET "$FEISHU_WEBHOOK_SECRET"
-              sudo grep -q '^NOTIFY_ENABLED=' "$ENV_FILE" || echo 'NOTIFY_ENABLED=true' | sudo tee -a "$ENV_FILE"
-  >/dev/null
-              sudo grep -q '^NOTIFY_LEVEL='   "$ENV_FILE" || echo 'NOTIFY_LEVEL=all'    | sudo tee -a "$ENV_FILE"
-  >/dev/null
-
-              # 部署：从 origin/main 硬同步（容忍 CRLF / 本地脏树），再装依赖+构建+重启
-              cd /opt/tradeagent
-              sudo -u tradeagent git fetch origin --quiet
-              sudo -u tradeagent git reset --hard origin/main
-              sudo -u tradeagent bash -c 'cd /opt/tradeagent/backend && .venv/bin/pip install -q -e .' || true
-              sudo -u tradeagent bash -c 'cd /opt/tradeagent/frontend && npm run build' 2>&1 | tail -8
-              sudo systemctl restart tradeagent-backend tradeagent-frontend
-          env:
-            FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
-            FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
-
-        - name: Verify + notify-test
-          uses: appleboy/ssh-action@v1.2.0
-          with:
-            host: ${{ secrets.ECS_HOST }}
-            username: ${{ secrets.ECS_USER }}
-            key: ${{ secrets.ECS_SSH_KEY }}
-            port: ${{ secrets.ECS_PORT || 22 }}
-            script_stop: false
-            script: |
-              sleep 3
-              curl -fsS http://127.0.0.1:8000/health && echo " | backend healthy"
-              ADMIN_TOKEN=$(sudo grep '^ADMIN_REBUILD_TOKEN=' /etc/tradeagent/.env | cut -d= -f2)
-              if [ -n "$ADMIN_TOKEN" ] && sudo grep -q '^FEISHU_WEBHOOK_URL=https' /etc/tradeagent/.env; then
-                echo 'sending feishu test card...'
-                curl -s -X POST http://127.0.0.1:8000/api/admin/notify-test -H "X-Admin-Token: $ADMIN_TOKEN"
-                echo
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Sync env + deploy + restart
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USER }}
+          key: ${{ secrets.ECS_SSH_KEY }}
+          port: ${{ secrets.ECS_PORT || 22 }}
+          envs: FEISHU_WEBHOOK_URL,FEISHU_WEBHOOK_SECRET
+          script_stop: true
+          script: |
+            set -e
+            ENV_FILE=/etc/tradeagent/.env
+            upsert() {
+              local key="$1" val="$2"
+              [ -z "$val" ] && return 0
+              if sudo grep -q "^$key=" "$ENV_FILE"; then
+                sudo sed -i "s|^$key=.*|$key=$val|" "$ENV_FILE"
               else
-                echo 'FEISHU_WEBHOOK_URL or admin token missing, skipped notify-test'
+                echo "$key=$val" | sudo tee -a "$ENV_FILE" >/dev/null
               fi
+            }
+            upsert FEISHU_WEBHOOK_URL    "$FEISHU_WEBHOOK_URL"
+            upsert FEISHU_WEBHOOK_SECRET "$FEISHU_WEBHOOK_SECRET"
+            sudo grep -q '^NOTIFY_ENABLED=' "$ENV_FILE" || echo 'NOTIFY_ENABLED=true' | sudo tee -a "$ENV_FILE" >/dev/null
+            sudo grep -q '^NOTIFY_LEVEL='   "$ENV_FILE" || echo 'NOTIFY_LEVEL=all'    | sudo tee -a "$ENV_FILE" >/dev/null
+
+            # 部署：从 origin/main 硬同步（容忍 CRLF / 本地脏树），再装依赖+构建+重启
+            cd /opt/tradeagent
+            sudo -u tradeagent git fetch origin --quiet
+            sudo -u tradeagent git reset --hard origin/main
+            sudo -u tradeagent bash -c 'cd /opt/tradeagent/backend && .venv/bin/pip install -q -e .' || true
+            sudo -u tradeagent bash -c 'cd /opt/tradeagent/frontend && npm run build' 2>&1 | tail -8
+            sudo systemctl restart tradeagent-backend tradeagent-frontend
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
+
+      - name: Verify + notify-test
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USER }}
+          key: ${{ secrets.ECS_SSH_KEY }}
+          port: ${{ secrets.ECS_PORT || 22 }}
+          script_stop: false
+          script: |
+            sleep 3
+            curl -fsS http://127.0.0.1:8000/health && echo " | backend healthy"
+            ADMIN_TOKEN=$(sudo grep '^ADMIN_REBUILD_TOKEN=' /etc/tradeagent/.env | cut -d= -f2)
+            if [ -n "$ADMIN_TOKEN" ] && sudo grep -q '^FEISHU_WEBHOOK_URL=https' /etc/tradeagent/.env; then
+              echo 'sending feishu test card...'
+              curl -s -X POST http://127.0.0.1:8000/api/admin/notify-test -H "X-Admin-Token: $ADMIN_TOKEN"
+              echo
+            else
+              echo 'FEISHU_WEBHOOK_URL or admin token missing, skipped notify-test'
+            fi
