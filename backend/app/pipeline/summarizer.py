@@ -75,6 +75,15 @@ SYSTEM_PROMPT_US = (
 """
 )
 
+SYSTEM_PROMPT_OVERSEAS = (
+    SYSTEM_PROMPT_BASE
+    + """
+5. **重要**：核心指数、板块涨跌幅、领涨/领跌个股均已由数据源（Yahoo Finance 实时行情）直接提供，**不要**在 movers 数组里重复列个股，**movers 必须返回空数组 []**。
+6. 你的工作集中在 summary_md（盘面综述）和 sectors（板块解读）上。summary_md 要引用核心指数当日涨跌幅、点出主线/资金面/宏观事件（汇率、央行、出口数据、龙头财报等），并准确引用消息里给的板块与个股涨跌数字。
+7. 关于 sectors：消息里【板块涨跌幅（代表性成分股均值）】列出了板块及其涨跌幅。请从中挑选当日值得解读的 6-9 个，name 与消息里的板块名**一字不差**（如「半导体与电子」「金融」「汽车」），change_pct **直接抄消息里的数字**（含正负号），note 用简体中文写明异动原因（财报、汇率、龙头公司新闻、利率预期等）。
+"""
+)
+
 
 REPORT_TOOL_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -183,6 +192,8 @@ def summarize(
         system_prompt = SYSTEM_PROMPT_CN_A
     elif market == "us":
         system_prompt = SYSTEM_PROMPT_US
+    elif market in ("jp", "kr"):
+        system_prompt = SYSTEM_PROMPT_OVERSEAS
     else:
         system_prompt = SYSTEM_PROMPT_DEFAULT
 

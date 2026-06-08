@@ -31,9 +31,13 @@ from app.pipeline.market_queries import build_queries
 from app.pipeline.summarizer import generate_limit_up_reasons, summarize
 from app.pipeline.tavily_client import dedupe_and_compact, search_many
 from app.pipeline.jp_kr_data import (
+    build_movers_from_basket,
+    build_sectors_from_basket,
+    fetch_jp_basket,
     fetch_jp_indices,
+    fetch_kr_basket,
     fetch_kr_indices,
-    summarize_idx_for_llm,
+    summarize_overseas_for_llm,
 )
 from app.pipeline.us_data import (
     fetch_us_indices,
@@ -109,11 +113,17 @@ def run_pipeline_sync(market: str, report_date: date, *, force: bool = False) ->
 
 
 async def _run_jp(report_date: date) -> int:
-    return await _run_overseas(market="jp", label="日股", report_date=report_date, fetch_idx=fetch_jp_indices)
+    return await _run_overseas(
+        market="jp", label="日股", report_date=report_date,
+        fetch_idx=fetch_jp_indices, fetch_basket=fetch_jp_basket,
+    )
 
 
 async def _run_kr(report_date: date) -> int:
-    return await _run_overseas(market="kr", label="韩股", report_date=report_date, fetch_idx=fetch_kr_indices)
+    return await _run_overseas(
+        market="kr", label="韩股", report_date=report_date,
+        fetch_idx=fetch_kr_indices, fetch_basket=fetch_kr_basket,
+    )
 
 
 async def _run_overseas(
@@ -121,16 +131,21 @@ async def _run_overseas(
     label: str,
     report_date: date,
     fetch_idx,
+    fetch_basket,
 ) -> int:
-    """日/韩股通用：结构化只有指数，其他（sectors、movers）走 LLM 从 Tavily 提取。"""
+    """日/韩股通用：指数 + 精选大盘股篮子（Yahoo）给权威涨跌幅，LLM 只写综述 + 板块 note。
+
+    篮子全挂时降级回老路（sectors/movers 由 LLM 从 Tavily 提取）。
+    """
     queries = build_queries(market, report_date)
-    indices, batches = await asyncio.gather(
+    indices, basket, batches = await asyncio.gather(
         fetch_idx(),
+        fetch_basket(),
         search_many(queries, max_results=8),
     )
     sources = dedupe_and_compact(batches)
 
-    if not indices and not sources:
+    if not indices and not basket and not sources:
         return _persist_failed(market, report_date, "no data from any source", batches)
 
     # report_date 用 indices 实际数据日（避免 UTC vs Asia/Shanghai 跨日导致重复 row）
@@ -141,29 +156,79 @@ async def _run_overseas(
         except ValueError:
             pass
 
-    digest = summarize_idx_for_llm(label, indices) if indices else ""
+    sectors_data = build_sectors_from_basket(basket)
+    gainers, losers = build_movers_from_basket(basket)
+    digest = summarize_overseas_for_llm(label, indices, sectors_data, gainers, losers)
     log.info(
-        "%s data: indices=%d tavily_sources=%d",
+        "%s data: indices=%d basket=%d sectors=%d gainers=%d losers=%d tavily_sources=%d",
         market,
         len(indices),
+        len(basket),
+        len(sectors_data),
+        len(gainers),
+        len(losers),
         len(sources),
     )
 
-    # 即使 LLM 失败也要保住 indices，让 SnapshotPanel 至少能显示
+    # 即使 LLM 失败也要保住 indices/篮子数据，让前端至少能显示
     try:
         structured, model_id = summarize(
             market, report_date, sources, pool_digest=digest or None
         )
     except Exception as e:
-        log.error("%s summarize failed (keeping indices): %s", market, e)
+        log.error("%s summarize failed (keeping structured data): %s", market, e)
         structured = {"summary_md": f"LLM 综述失败：{type(e).__name__}", "sectors": [], "movers": []}
         model_id = ""
-    sectors = _build_sectors(structured.get("sectors") or [])
-    movers = _build_movers_from_llm(structured.get("movers") or [])
+
+    # sectors：篮子有数据时用权威涨跌幅，note 走 LLM 输出按名称模糊匹配；否则降级回 LLM
+    llm_sector_notes = {
+        (s.get("name") or "").strip(): str(s.get("note", ""))
+        for s in (structured.get("sectors") or [])
+        if (s.get("name") or "").strip()
+    }
+
+    def _lookup_note(target: str) -> str:
+        if target in llm_sector_notes:
+            return llm_sector_notes[target]
+        for k, v in llm_sector_notes.items():
+            if target in k or k in target:
+                return v
+        return ""
+
+    if sectors_data:
+        sectors = [
+            MarketSector(
+                name=s["name"],
+                change_pct=round(s["change_pct"], 2),
+                note=_lookup_note(s["name"]),
+            )
+            for s in sectors_data
+        ]
+    else:
+        sectors = _build_sectors(structured.get("sectors") or [])
+
+    # movers：篮子有数据时用权威涨跌榜；否则降级回 LLM
+    if gainers or losers:
+        movers = [
+            MarketMover(
+                symbol=g["symbol"][:32], name=g["name"][:64],
+                move_type="top_gainer", change_pct=g.get("change_pct"), note="",
+            )
+            for g in gainers
+        ] + [
+            MarketMover(
+                symbol=lo["symbol"][:32], name=lo["name"][:64],
+                move_type="top_loser", change_pct=lo.get("change_pct"), note="",
+            )
+            for lo in losers
+        ]
+    else:
+        movers = _build_movers_from_llm(structured.get("movers") or [])
 
     raw_payload = {
         "tavily_sources": sources,
         "indices": indices,
+        "basket_count": len(basket),
         "digest": digest,
     }
     return _persist(
