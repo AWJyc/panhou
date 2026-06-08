@@ -82,7 +82,19 @@ async def run_pipeline(market: str, report_date: date, *, force: bool = False) -
 
     elapsed = time.monotonic() - started
     _notify_safe(market, report_date, report_id, elapsed, forced_status, err_msg)
+    _prune_safe(market)
     return report_id
+
+
+def _prune_safe(market: str) -> None:
+    """跑完后裁剪该市场历史，只保留最近 N 个交易日。异常吞掉不影响主流程。"""
+    try:
+        from app.config import get_settings
+        from app.pipeline.retention import prune_market_history
+
+        prune_market_history(market, keep=get_settings().report_retention_days)
+    except Exception as e:
+        log.warning("retention prune 异常 (吞掉): %s", e)
 
 
 def _notify_safe(

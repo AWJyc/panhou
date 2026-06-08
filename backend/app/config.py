@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     scheduler_timezone: str = "Asia/Shanghai"
 
+    # 历史报告保留：每个市场只保留最近 N 个交易日(report_date)的报告，更早的自动删除。
+    # 每次 pipeline 跑完时对该市场做一次裁剪。
+    report_retention_days: int = 3
+
     # 飞书自定义机器人 webhook（pipeline 跑完发告警）
     # 建群 → 设置 → 群机器人 → 添加机器人 → 自定义机器人 → 复制 Webhook 地址
     # secret 可选；如开了"签名校验"必填

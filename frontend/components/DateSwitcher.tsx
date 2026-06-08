@@ -96,6 +96,9 @@ export function DateSwitcher({ market, currentDate, history }: Props) {
               );
             })}
           </ul>
+          <div className="mt-2 pt-2 border-t border-line-subtle text-[11px] text-ink-muted leading-snug">
+            仅保留最近 3 个交易日的报告，更早的已自动清理。
+          </div>
         </div>
       )}
     </div>
