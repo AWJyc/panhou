@@ -19,14 +19,14 @@ name: Deploy to Aliyun
       runs-on: ubuntu-latest
       timeout-minutes: 15
       steps:
-        - name: Sync env + git pull + restart
+        - name: Sync env + deploy + restart
           uses: appleboy/ssh-action@v1.2.0
           with:
-            host:     ${{ secrets.ECS_HOST }}
+            host: ${{ secrets.ECS_HOST }}
             username: ${{ secrets.ECS_USER }}
-            key:      ${{ secrets.ECS_SSH_KEY }}
-            port:     ${{ secrets.ECS_PORT || 22 }}
-            envs:     FEISHU_WEBHOOK_URL,FEISHU_WEBHOOK_SECRET
+            key: ${{ secrets.ECS_SSH_KEY }}
+            port: ${{ secrets.ECS_PORT || 22 }}
+            envs: FEISHU_WEBHOOK_URL,FEISHU_WEBHOOK_SECRET
             script_stop: true
             script: |
               set -e
@@ -47,22 +47,24 @@ name: Deploy to Aliyun
               sudo grep -q '^NOTIFY_LEVEL='   "$ENV_FILE" || echo 'NOTIFY_LEVEL=all'    | sudo tee -a "$ENV_FILE"
   >/dev/null
 
+              # 部署：从 origin/main 硬同步（容忍 CRLF / 本地脏树），再装依赖+构建+重启
               cd /opt/tradeagent
-              sudo -u tradeagent git pull --ff-only
-              sudo -u tradeagent bash -c 'cd backend && .venv/bin/pip install -q -e .' || true
-              sudo -u tradeagent bash -c 'cd frontend && npm run build' 2>&1 | tail -5
+              sudo -u tradeagent git fetch origin --quiet
+              sudo -u tradeagent git reset --hard origin/main
+              sudo -u tradeagent bash -c 'cd /opt/tradeagent/backend && .venv/bin/pip install -q -e .' || true
+              sudo -u tradeagent bash -c 'cd /opt/tradeagent/frontend && npm run build' 2>&1 | tail -8
               sudo systemctl restart tradeagent-backend tradeagent-frontend
           env:
-            FEISHU_WEBHOOK_URL:    ${{ secrets.FEISHU_WEBHOOK_URL }}
+            FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
             FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
 
         - name: Verify + notify-test
           uses: appleboy/ssh-action@v1.2.0
           with:
-            host:     ${{ secrets.ECS_HOST }}
+            host: ${{ secrets.ECS_HOST }}
             username: ${{ secrets.ECS_USER }}
-            key:      ${{ secrets.ECS_SSH_KEY }}
-            port:     ${{ secrets.ECS_PORT || 22 }}
+            key: ${{ secrets.ECS_SSH_KEY }}
+            port: ${{ secrets.ECS_PORT || 22 }}
             script_stop: false
             script: |
               sleep 3
@@ -70,8 +72,7 @@ name: Deploy to Aliyun
               ADMIN_TOKEN=$(sudo grep '^ADMIN_REBUILD_TOKEN=' /etc/tradeagent/.env | cut -d= -f2)
               if [ -n "$ADMIN_TOKEN" ] && sudo grep -q '^FEISHU_WEBHOOK_URL=https' /etc/tradeagent/.env; then
                 echo 'sending feishu test card...'
-                curl -s -X POST http://127.0.0.1:8000/api/admin/notify-test \
-                  -H "X-Admin-Token: $ADMIN_TOKEN"
+                curl -s -X POST http://127.0.0.1:8000/api/admin/notify-test -H "X-Admin-Token: $ADMIN_TOKEN"
                 echo
               else
                 echo 'FEISHU_WEBHOOK_URL or admin token missing, skipped notify-test'
